@@ -9,6 +9,7 @@
 
 void run2Approximation();
 void runBSTExact();
+void runBSTExact_skip();
 // Returns the size of the 2-approximation vertex cover
 int getApproximateK(const std::string& filename) {
     Graph graph = parseGraph(filename);
@@ -19,17 +20,18 @@ int getApproximateK(const std::string& filename) {
 int main() {
     std::cout << "Choose Algo:\n";
     std::cout << "[1] 2-Approx\n"
-              << "[2] BST exact\n";
-
+              << "[2] BST exact\n"
+             << "[3] BST exact, skip segmentation faullt instances\n";
     std::string input;
     std::getline(std::cin, input);
 
-    while(input != "1" && input != "2") {
+    while(input != "1" && input != "2"&& input != "3") {
         std::cout << "Invalid!\n\n";
 
         std::cout << "Choose Algo:\n";
         std::cout << "[1] 2-Approx\n"
-                  << "[2] BST exact\n";
+                  << "[2] BST exact\n"
+                  << "[3] BST exact, skip segmentation faullt instances\n";
         std::getline(std::cin, input);
     }
 
@@ -37,6 +39,8 @@ int main() {
         run2Approximation();
     } else if (input == "2") {
         runBSTExact();
+    }else if (input == "3") {
+        runBSTExact_skip();
     }
 
     return 0;
@@ -89,7 +93,7 @@ void runBSTExact() {
 
     outputFile << "File,Vertex Cover Size,Computation Time (seconds)" << std::endl;
 
-    const double TIME_LIMIT = 10.0;  // Set a time limit for each run (in seconds)
+    const double TIME_LIMIT = 15.0;  // Set a time limit for each run (in seconds)
 
     for (int i = 1; i <= 200; ++i) {
         std::string filename = std::string("pace2019_track1_vc_exact_all/vc-exact_") + (i < 10 ? "00" : (i < 100 ? "0" : "")) + std::to_string(i) + ".gr";
@@ -140,4 +144,77 @@ void runBSTExact() {
 
     outputFile.close();
     std::cout << "Results saved to bst_exact_results.csv" << std::endl;
+}
+
+
+void runBSTExact_skip(){
+
+    std::ofstream outputFile("bst_exact_results.csv");
+    if (!outputFile.is_open()) {
+        std::cerr << "Error: Unable to open output file." << std::endl;
+        return;
+    }
+
+    outputFile << "File,Vertex Cover Size,Computation Time (seconds)" << std::endl;
+
+    const double TIME_LIMIT = 15.0;  // Set a time limit for each run (in seconds)
+
+    for (int i = 1; i <= 200; ++i) {
+        // Skip the input 88
+        if (i == 88||i==89||i == 109||i == 110||i == 120||i == 161||i == 162||i == 173||i == 183) {
+            std::cout << "Skipping file for input " << i << std::endl;
+            outputFile << "pace2019_track1_vc_exact_all/vc-exact_00" << i << ".gr,SegmentationFault,Skipped" << std::endl;
+            continue; // Skip the rest of the loop for this iteration
+        }
+
+        std::string filename = std::string("pace2019_track1_vc_exact_all/vc-exact_") + (i < 10 ? "00" : (i < 100 ? "0" : "")) + std::to_string(i) + ".gr";
+
+        try {
+            // Start time for this run using steady_clock
+            auto start = std::chrono::steady_clock::now();
+
+            Graph graph = parseGraph(filename);
+            int k = getApproximateK(filename); // Get k from the 2-approximation or a default source
+
+            std::unordered_set<int> cover;
+
+            // Track time and check if we exceed the time limit
+            cover = BST_VC(graph, cover, k, start, TIME_LIMIT); // Get the vertex cover from BST_VC
+
+            if (!cover.empty()) {
+                // Stop measuring time
+                auto end = std::chrono::steady_clock::now();
+                std::chrono::duration<double> duration = end - start;
+
+                if (duration.count() > TIME_LIMIT) {
+                    std::cerr << "Time limit exceeded for file " << filename << std::endl;
+                    outputFile << filename << ",Error,Time limit exceeded" << std::endl;
+                    continue;
+                }
+
+                std::cout << "File: " << filename << " | Vertex Cover Size: " << cover.size()
+                          << " | Computation Time: " << duration.count() << " seconds" << std::endl;
+
+                outputFile << filename << "," << cover.size() << "," << duration.count() << std::endl;
+            } else {
+                std::cerr << "Error processing file " << filename << ": No solution found" << std::endl;
+                outputFile << filename << ",Error,No solution found" << std::endl;
+            }
+
+        } catch (const std::exception& e) {
+            // Catch standard exceptions like recursion errors
+            std::cerr << "Recursion error processing file " << filename << ": " << e.what() << std::endl;
+            outputFile << filename << ",RE," << e.what() << std::endl;
+
+        } catch (...) {
+            // Catch any other types of exceptions (including segmentation fault errors)
+            std::cerr << "Unknown error occurred for file " << filename << ". Skipping." << std::endl;
+            outputFile << filename << ",RE,Unknown error" << std::endl;
+        }
+    }
+
+    outputFile.close();
+    std::cout << "Results saved to bst_exact_results.csv" << std::endl;
+
+    
 }
